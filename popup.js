@@ -1,12 +1,12 @@
 /**
  * LAN Share - Chrome Extension
  * 
- * Handles real-time text and file sharing via WebSocket.
- * Connects to a Node.js server (ws library) on the local network.
+ * Implements the JSON-based protocol for text sharing and device discovery.
+ * Supports binary data for file transfers.
  */
 
 // --- Configuration ---
-const SERVER_IP = "localhost"; // Change this to your local network IP (e.g., 192.168.1.5)
+const SERVER_IP = "localhost"; // Change this to your local network IP
 const SERVER_PORT = "3000";
 const WS_URL = `ws://${SERVER_IP}:${SERVER_PORT}`;
 
@@ -17,6 +17,7 @@ const fileBtn = document.getElementById("fileButton");
 const fileInput = document.getElementById("fileInput");
 const fileNameLabel = document.getElementById("fileName");
 const textArea = document.getElementById("text");
+const deviceDropdown = document.getElementById("devices");
 const statusDot = document.getElementById("status-dot");
 const statusText = document.getElementById("status-text");
 
@@ -25,18 +26,17 @@ let socket = null;
 
 function connect() {
   socket = new WebSocket(WS_URL);
-  socket.binaryType = "arraybuffer"; // Important for file transfers
+  socket.binaryType = "arraybuffer"; // Support binary file transfers
 
   socket.onopen = () => {
-    console.log("✅ Connected to LAN Share server");
+    console.log("✅ WebSocket Connected");
     updateStatus("Connected", "connected");
   };
 
   socket.onclose = () => {
-    console.log("❌ Disconnected from server");
+    console.log("❌ WebSocket Disconnected");
     updateStatus("Not Connected", "");
-    // Optional: Attempt reconnection after 3 seconds
-    setTimeout(connect, 3000);
+    setTimeout(connect, 3000); // Reconnect logic
   };
 
   socket.onerror = (error) => {
@@ -48,42 +48,83 @@ function connect() {
 }
 
 /**
- * Handle connection status UI updates
- */
-function updateStatus(text, className) {
-  statusText.textContent = text;
-  statusDot.className = "status-dot " + className;
-}
-
-/**
- * Process incoming WebSocket messages (Text or Binary)
+ * Handle incoming messages based on the protocol
  */
 async function handleIncomingMessage(event) {
   const { data } = event;
 
-  // 1. Handle Text Data
-  if (typeof data === "string") {
-    console.log("📝 Received Text:", data);
-    textArea.value = data;
-    
-    // Provide visual feedback
-    textArea.classList.add("pulse");
-    setTimeout(() => textArea.classList.remove("pulse"), 1000);
-
-    // Auto-copy to clipboard
-    copyToClipboard(data);
-  } 
-  // 2. Handle Binary Data (Files)
-  else if (data instanceof ArrayBuffer) {
-    console.log("📁 Received File Data", data.byteLength, "bytes");
-    downloadFile(data, "shared_file_" + Date.now());
+  // 1. Handle Binary Data (Files)
+  if (data instanceof ArrayBuffer) {
+    console.log("📁 Received Binary Data");
+    downloadFile(data, `shared_file_${Date.now()}`);
+    return;
   }
+
+  // 2. Handle JSON Data (Text/Devices)
+  try {
+    const message = JSON.parse(data);
+    
+    switch (message.type) {
+      case "devices":
+        updateDeviceList(message.payload);
+        break;
+      
+      case "message":
+        handleTextMessage(message.payload);
+        break;
+      
+      default:
+        console.warn("❓ Unknown message type:", message.type);
+    }
+  } catch (err) {
+    console.error("❌ Failed to parse message:", err);
+  }
+}
+
+/**
+ * Update the device dropdown menu
+ */
+function updateDeviceList(deviceIds) {
+  console.log("📱 Updating Device List:", deviceIds);
+  
+  // Clear existing options
+  deviceDropdown.innerHTML = "";
+  
+  // Add default option
+  const defaultOption = document.createElement("option");
+  defaultOption.value = "";
+  defaultOption.textContent = "Select Destination (Currently Broadcast)";
+  deviceDropdown.appendChild(defaultOption);
+
+  // Populate with new devices (avoiding duplicates if server didn't already)
+  const uniqueDevices = [...new Set(deviceIds)];
+  uniqueDevices.forEach(id => {
+    const option = document.createElement("option");
+    option.value = id;
+    option.textContent = id;
+    deviceDropdown.appendChild(option);
+  });
+}
+
+/**
+ * Handle incoming text messages
+ */
+function handleTextMessage(text) {
+  console.log("📝 Received Message:", text);
+  textArea.value = text;
+  
+  // Auto-copy to clipboard
+  copyToClipboard(text);
+  
+  // Visual feedback
+  textArea.style.borderColor = "var(--success-color)";
+  setTimeout(() => textArea.style.borderColor = "", 1000);
 }
 
 /**
  * Send content via WebSocket
  */
-function sendMessage() {
+function sendContent() {
   if (!socket || socket.readyState !== WebSocket.OPEN) {
     alert("Connection not established!");
     return;
@@ -92,47 +133,49 @@ function sendMessage() {
   const file = fileInput.files[0];
   const text = textArea.value.trim();
 
-  // Prioritize File Transfer if selected
+  // 1. Send File (Priority)
   if (file) {
     const reader = new FileReader();
     reader.onload = (e) => {
-      const buffer = e.target.result;
-      socket.send(buffer);
-      console.log("📤 Sent File:", file.name);
-      
+      socket.send(e.target.result);
+      console.log("📤 Sent Binary File:", file.name);
       resetFileInput();
-      showSuccessFeedback("File Sent!");
+      showActionFeedback("File Sent!");
     };
     reader.readAsArrayBuffer(file);
-  } 
-  // Otherwise Send Text
-  else if (text) {
-    socket.send(text);
-    console.log("📤 Sent Text:", text);
-    showSuccessFeedback("Sent!");
-    // textArea.value = ""; // Optional: clear after send
+    return;
+  }
+
+  // 2. Send Text
+  if (text) {
+    const payload = JSON.stringify({
+      type: "message",
+      payload: text
+    });
+    socket.send(payload);
+    console.log("📤 Sent Text Message");
+    showActionFeedback("Sent!");
   }
 }
 
 /**
- * Utility: Trigger file download for binary data
+ * Trigger file download
  */
-function downloadFile(data, defaultName) {
+function downloadFile(data, name) {
   const blob = new Blob([data]);
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = defaultName;
+  a.download = name;
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
-  
-  showSuccessFeedback("File Received & Downloaded!");
+  showActionFeedback("Received File!");
 }
 
 /**
- * Utility: Copy text to clipboard
+ * Copy text to clipboard
  */
 async function copyToClipboard(text) {
   try {
@@ -143,14 +186,17 @@ async function copyToClipboard(text) {
   }
 }
 
-/**
- * UI Feedback for Actions
- */
-function showSuccessFeedback(msg) {
+// --- UI Utilities ---
+
+function updateStatus(text, className) {
+  statusText.textContent = text;
+  statusDot.className = "status-dot " + className;
+}
+
+function showActionFeedback(msg) {
   const originalText = sendBtn.innerHTML;
   sendBtn.textContent = msg;
   sendBtn.style.backgroundColor = "var(--success-color)";
-  
   setTimeout(() => {
     sendBtn.innerHTML = originalText;
     sendBtn.style.backgroundColor = "";
@@ -164,7 +210,7 @@ function resetFileInput() {
 
 // --- Event Listeners ---
 
-sendBtn.addEventListener("click", sendMessage);
+sendBtn.addEventListener("click", sendContent);
 
 pasteBtn.addEventListener("click", async () => {
   try {
@@ -182,9 +228,8 @@ fileInput.addEventListener("change", (e) => {
   const file = e.target.files[0];
   if (file) {
     fileNameLabel.textContent = file.name;
-    console.log("📎 File selected:", file.name);
   }
 });
 
-// Initialize connection
+// Initialize
 connect();
