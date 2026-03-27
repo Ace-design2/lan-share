@@ -1,0 +1,17 @@
+{
+  "manifest_version": 3,
+  "name": "LAN Share",
+  "version": "1.0",
+  "description": "Copy & share across devices",
+  "permissions": [
+    "clipboardRead",
+    "clipboardWrite",
+    "storage"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_popup": "popup.html"
+  }
+}

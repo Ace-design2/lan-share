@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LAN Share</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="header">
+    <h1>LAN Share</h1>
+    <div class="status-badge" id="status-container">
+      <span class="status-dot" id="status-dot"></span>
+      <span id="status-text">Not Connected</span>
+    </div>
+  </div>
+
+  <div class="device-section">
+    <select class="device-select" id="device-select">
+      <option value="">Select Device...</option>
+      <option value="broadcast">Broadcast to All</option>
+      <option value="office-laptop">Office Laptop</option>
+      <option value="phone">Pixel 8</option>
+    </select>
+  </div>
+  
+  <div class="input-container">
+    <textarea id="text" placeholder="Type or paste content to share..."></textarea>
+  </div>
+  
+  <div class="button-group">
+    <button id="send" class="btn-primary">
+      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-send"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg>
+      Send
+    </button>
+    <button id="paste" class="btn-secondary">
+      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-clipboard"><rect width="8" height="4" x="8" y="2" rx="1" ry="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/></svg>
+      Paste from Clipboard
+    </button>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
